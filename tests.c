@@ -8,14 +8,23 @@
 
 #include "ringbuf.h"
 
-void test_print_rw(ringbuffer_t *rb) {
-    uint8_t *p  = rb->bs;
+void test_validate_rb(ringbuffer_t *rb) {
+    uint8_t *rp = rb->rp;
+    uint8_t *wp = rb->rp;
+    uint8_t *bs  = rb->bs;
     uint8_t *be = rb->be;
-
-    if( p > be ) {
-        perror("MEMORY DAMAGE!");
+    if( !( rp >= bs && rp < be && wp >= bs && wp < be ) ) {
+        fprintf(stderr, "MEMORY DAMAGE!\n");
         exit(-1);
     }
+}
+
+
+void test_print_rw(ringbuffer_t *rb) {
+    uint8_t *rp = rb->rp;
+    uint8_t *wp = rb->rp;
+    uint8_t *p  = rb->bs;
+    uint8_t *be = rb->be;
 
     for(p = rb->bs; p < be; p++) {
         char c = ' ';
@@ -433,15 +442,16 @@ int test_case_7() {
 
 int test_case_8() {
     ringbuffer_t *rb;
-    const uint8_t data[46] = "QWERTYUIOP{}|ASDFGHJKL:'ZXCVBNM<>?0123456789~";
+    const uint8_t data[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     uint8_t result[sizeof(data)] = { 0 };
-    uint8_t databuf[RINGBUF_ALLOC_SIZE(46+3)] = { 0 };
+    uint8_t databuf[RINGBUF_ALLOC_SIZE(sizeof(data)+3)] = { 0 };
     uint8_t written = 0;
     uint8_t read = 0;
     size_t datalen = sizeof(data) - 1;
-    size_t ra0 = 0, wa0 = 0;
+    size_t ra0 = 0, wa0 = 0, ra1 = 0, wa1 = 0;
     size_t i = 1;
     size_t iter = 0;
+    size_t len = 12;
     int res = 1;
 
     rb = ringbuffer_alloc(sizeof(databuf), databuf);
@@ -450,41 +460,38 @@ int test_case_8() {
     printf("TEST CASE #8 :: NAME = CONSUME_TRIVIAL\n");
     printf("TEST CASE #8 :: LOG = datalen: %d, data: %s\n", datalen, data);
 
-    for(iter = 0; iter < 20; iter++ ) {
+/*    for(iter = 1; iter < 12; iter++ ) {*/
+
+/*    printf("\n");*/
+/*    test_print_rw(rb);*/
+/*    printf("\n");*/
+/*    test_dump(rb->bs, rb->be, "%c");*/
+/*    printf("\n");*/
+
+
+    for(i = 1; i < sizeof(data) - 2 && res; i++) {
         uint8_t *rp = &result[0];
-        memset(result, '0', 45);
-
+        len = i;
+        memset(result, 0, sizeof(data));
         written = ringbuffer_write(rb, data, datalen);
-
+        ra0 = ringbuffer_read_avail(rb);
+        wa0 = ringbuffer_write_avail(rb);
+/*        printf("TEST CASE #8 :: LOG0 = ra0: %d, wa0: %d, len: %d \n", ra0, wa0, len);*/
         while( ringbuffer_read_avail(rb) ) {
             ra0 = ringbuffer_read_avail(rb);
             wa0 = ringbuffer_write_avail(rb);
-            printf("TEST CASE #8 :: LOG0 = ra0: %d, wa0: %d, i: %d \n", ra0, wa0, i);
-            read = ringbuffer_read(rb, rp, i);
-            printf("\n");
-            test_print_rw(rb);
-            printf("\n");
-            test_dump(rb->bs, rb->be, "%c");
-            printf("\n");
-            i += 2;
-            i %= 16;
+            read = ringbuffer_read(rb, rp, len);
+/*            printf("\n");*/
+/*            test_print_rw(rb);*/
+/*            printf("\n");*/
+/*            test_dump(rb->bs, rb->be, "%c");*/
+/*            printf("\n");*/
             rp += read;
         }
-
-        printf("\n");
-        test_print_rw(rb);
-        printf("\n");
-        test_dump(result, rp, "%c");
-        printf("\n");
-        ra0 = ringbuffer_read_avail(rb);
-        wa0 = ringbuffer_write_avail(rb);
-        printf("TEST CASE #8 :: LOG = ra0: %d, wa0: %d, i: %d \n", ra0, wa0, i);
-
         res = res && !strncmp(result, data, datalen);
-        if( !strncmp(result, data, datalen) ) {
-            printf("TEST CASE #8 :: LOG = iter: %d, result: %s\n", iter, res?"OK":"FAIL");
+        if( res ) {
+            printf("TEST CASE #8 :: LOG = WND: %d %s, PASS OK\n", len, result);
         }
-
     }
 
     if( res ) {
@@ -507,6 +514,9 @@ int main(void) {
 /*    test_case_5();*/
 /*    test_case_6();*/
 /*    test_case_7();*/
+
+    fprintf(stderr, "SIZEOF(uint8_t) == %d\n", sizeof(uint8_t));
+
     test_case_8();
 
     return 0;

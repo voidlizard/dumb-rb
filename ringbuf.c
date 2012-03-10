@@ -3,7 +3,10 @@
 
 #include <string.h>
 
-#define ringbuffer_shift_ptr(p, s, e, w) ((p) + (w) <= (e) ? (p) + (w) : (s) + ((w) - ((e)-(p))))
+#include <stdio.h>
+#include <stdlib.h>
+
+/*#define ringbuffer_shift_ptr(p, s, e, w) ((p) + (w) < (e) ? (p) + (w) : (s) + ((w) - ((size_t)((e)-(p)))))*/
 #define safe_sub(a, b) ((a) >= (b) ? ((a) - (b)) : 0)
 
 typedef enum {
@@ -33,6 +36,11 @@ static ringbuffer_state_t ringbuffer_get_state(ringbuffer_t *rb) {
     return state;
 }
 
+static inline uint8_t *ringbuffer_shift_ptr(uint8_t *p, uint8_t *s, uint8_t *e, size_t w) {
+    uint8_t *new_p = (p + w < e ? p + w : s + (w - ((size_t)(e-p))));
+    return new_p;
+}
+
 void ringbuffer_reset(ringbuffer_t *rb) {
     rb->bs = &rb->data[0];
     rb->be = &rb->data[rb->data_size];
@@ -40,6 +48,7 @@ void ringbuffer_reset(ringbuffer_t *rb) {
     rb->wp = rb->bs;
     rb->written = 0;
 }
+
 
 ringbuffer_t* ringbuffer_alloc(size_t data_size, uint8_t *data) {
     if( data_size < sizeof(ringbuffer_t) ) {
@@ -103,7 +112,7 @@ size_t ringbuffer_read_avail(ringbuffer_t *rb) {
     return avail;
 }
 
-size_t ringbuffer_write(ringbuffer_t *rb, const void *src, size_t size) {
+size_t ringbuffer_write(ringbuffer_t *rb, const uint8_t *src, size_t size) {
     uint8_t *rp = rb->rp;
     uint8_t *wp = rb->wp;
     uint8_t *bs = rb->bs;
@@ -132,18 +141,26 @@ size_t ringbuffer_write(ringbuffer_t *rb, const void *src, size_t size) {
             break;
     }
     rb->wp = ringbuffer_shift_ptr(wp, bs, be, towrite);
+
+/*    if( rb->rp < rb->bs || rb->rp >= rb->be ) {*/
+/*        fprintf(stderr, "BAD SHIFT ON WRITE");*/
+/*        exit(-1);*/
+/*    }*/
+
     rb->written += towrite;
     return towrite;
 }
 
-size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
+size_t ringbuffer_read(ringbuffer_t *rb, uint8_t *dst, size_t size) {
     uint8_t *rp = rb->rp;
     uint8_t *wp = rb->wp;
     uint8_t *bs = rb->bs;
     uint8_t *be = rb->be;
     size_t toread = size;
     size_t avail = ringbuffer_read_avail(rb);
+    int _state = RINGBUF_STATE_INVALID;
     toread = toread < avail ? toread : avail;
+    _state = ringbuffer_get_state(rb);
     if( !avail || !toread ) return 0;
     switch( ringbuffer_get_state(rb) ) {
         case RINGBUF_STATE_1:
@@ -153,8 +170,12 @@ size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
             size_t r2 = safe_sub(toread, r1);
             size_t rest2 = (size_t)(wp - bs);
             size_t r3 = r2 <= rest2 ? r2 : rest2;
-            if( r1 ) memcpy(dst, rp, r1);
-            if( r3 ) memcpy(dst + r1, bs, r3);
+            if( r1 ) {
+                memcpy(dst, rp, r1);
+            }
+            if( r3 ) {
+                memcpy(dst + r1, bs, r3);
+            }
         }
         break;
         case RINGBUF_STATE_2:
@@ -164,9 +185,7 @@ size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
             toread = 0;
             break;
     }
-/*    printf("DEBUG %08X\n", rb->rp); */
     rb->rp = ringbuffer_shift_ptr(rp, bs, be, toread);
-/*    printf("DEBUG %08X\n", rb->rp); */
     rb->written = safe_sub(rb->written, toread);
     return toread;
 }

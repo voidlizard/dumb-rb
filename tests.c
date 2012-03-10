@@ -460,15 +460,6 @@ int test_case_8() {
     printf("TEST CASE #8 :: NAME = CONSUME_TRIVIAL\n");
     printf("TEST CASE #8 :: LOG = datalen: %d, data: %s\n", datalen, data);
 
-/*    for(iter = 1; iter < 12; iter++ ) {*/
-
-/*    printf("\n");*/
-/*    test_print_rw(rb);*/
-/*    printf("\n");*/
-/*    test_dump(rb->bs, rb->be, "%c");*/
-/*    printf("\n");*/
-
-
     for(i = 1; i < sizeof(data) - 2 && res; i++) {
         uint8_t *rp = &result[0];
         len = i;

@@ -127,7 +127,7 @@ size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
 int test_case_1() {
     ringbuffer_t *rb;
     static uint8_t databuf[(sizeof(ringbuffer_t) - 1 + 256)];
-    printf("TEST CASE #1 :: Buffer init\n");
+    printf("TEST CASE #1 :: NAME = Buffer init\n");
     rb = ringbuffer_alloc(sizeof(databuf), databuf);
     printf("TEST CASE #1 :: LOG :: %d %d %d\n", rb->data_size, ringbuffer_read_avail(rb), ringbuffer_write_avail(rb));
     if( rb->data_size == 256 && ringbuffer_write_avail(rb) == 256 && ringbuffer_read_avail(rb) == 0 ) {

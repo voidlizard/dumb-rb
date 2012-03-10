@@ -478,56 +478,65 @@ int test_case_7_1() {
 
 
 #define TEST_CASE_7_2_RLEN   8192*2 
-#define TEST_CASE_7_2_CHUNK      64
+#define TEST_CASE_7_2_CHUNK     128 
 
 int test_case_7_2() {
     ringbuffer_t *rb;
-    static uint8_t databuf[RINGBUF_ALLOC_SIZE(TEST_CASE_7_2_CHUNK*2)];
+    static uint8_t databuf[RINGBUF_ALLOC_SIZE(TEST_CASE_7_2_CHUNK+TEST_CASE_7_2_CHUNK/2)];
     static uint8_t r1[TEST_CASE_7_2_RLEN+1] = { 0 };
     static uint8_t r2[TEST_CASE_7_2_RLEN+1] = { 0 };
     static uint8_t chunk[TEST_CASE_7_2_CHUNK] = { 0 };
     size_t tlen = sizeof(r1) - 1;
-    int res = 0;
-    int i = 0;
+    int res = 1;
+    int i = 10;
     size_t ra0 = 0, wa0 = 0, written = 0, read = 0;
     printf("TEST CASE #7_2 :: NAME = LOOP WRITE/READ\n");
     
     rb = ringbuffer_alloc(sizeof(databuf), databuf);
     memset(rb->rp, '#', rb->data_size);
 
-    srand(time(0));
+    for(i = 0; i<10; i++ ) {
 
-    while( written < tlen ) {
-        size_t wlen = ((size_t)rand()) % TEST_CASE_7_2_CHUNK;
-        size_t rlen = ((size_t)rand()) % TEST_CASE_7_2_CHUNK;
-        size_t wa = 0, ra = 0;
+        srand(time(0));
+        written = 0;
+        read    = 0;
 
-        wlen = written + wlen > tlen ? tlen - written : wlen;
+        while( written < tlen ) {
+            size_t wlen = ((size_t)rand()) % TEST_CASE_7_2_CHUNK;
+            size_t rlen = ((size_t)rand()) % TEST_CASE_7_2_CHUNK;
+            size_t wa = 0, ra = 0;
 
-        printf("TEST CASE #7_2 :: LOG = wlen: %d, rlen: %d\n", wlen, rlen);
-        wa = ringbuffer_write_avail(rb);
-        ra = ringbuffer_read_avail(rb);
+            wlen = written + wlen > tlen ? tlen - written : wlen;
 
-        if( wlen <= wa && wlen ) {
-            memset(chunk, '0' + (written%10), wlen);
-            memcpy(r1 + written, chunk, wlen);
-            ringbuffer_write(rb, chunk, wlen);
-            written += wlen;
+/*            printf("TEST CASE #7_2 :: LOG = wlen: %d, rlen: %d\n", wlen, rlen);*/
+            wa = ringbuffer_write_avail(rb);
+            ra = ringbuffer_read_avail(rb);
+
+            if( wlen <= wa && wlen && (wlen % 7) ) {
+                memset(chunk, '0' + (written%10), wlen);
+                memcpy(r1 + written, chunk, wlen);
+                ringbuffer_write(rb, chunk, wlen);
+                written += wlen;
+            }
+            if( rlen <= ra && rlen && (rlen % 5)) {
+                read += ringbuffer_read(rb, r2 + read, rlen);
+            }
+
+            test_validate_rb(rb);
         }
-        if( rlen <= ra && rlen ) {
-            read += ringbuffer_read(rb, r2 + read, rlen);
+ 
+        if( read < written ) {
+            read += ringbuffer_read(rb, r2 + read, (written - read));
         }
 
-        test_validate_rb(rb);
+        res = res && !strncmp(r1, r2, TEST_CASE_7_2_RLEN);
+        printf("TEST CASE #7_2 :: LOG = written: %d, read: %d, match: %d\n", written, read, res);
     }
 
-    if( read < written ) {
-        read += ringbuffer_read(rb, r2 + read, (written - read));
+    if( res ) {
+        printf("TEST CASE #7_2 :: RESULT = PASS\n");
+        return 0;
     }
-
-    res = !strncmp(r1, r2, TEST_CASE_7_2_RLEN);
-    printf("TEST CASE #7_2 :: LOG = written: %d, read: %d, match: %d\n", written, read, res);
-
 
     printf("TEST CASE #7_2 :: RESULT = FAIL\n");
 }
@@ -590,16 +599,16 @@ int test_case_8() {
 
 int main(void) {
 
-/*    test_case_1();*/
-/*    test_case_2();*/
-/*    test_case_3();*/
-/*    test_case_4();*/
-/*    test_case_5();*/
-/*    test_case_6();*/
+    test_case_1();
+    test_case_2();
+    test_case_3();
+    test_case_4();
+    test_case_5();
+    test_case_6();
 /*    test_case_7();*/
-/*    test_case_7_1();*/
+    test_case_7_1();
     test_case_7_2();
-/*    test_case_8();*/
+    test_case_8();
 
     return 0;
 }

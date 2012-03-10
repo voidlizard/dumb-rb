@@ -11,11 +11,20 @@
 void test_print_rw(ringbuffer_t *rb) {
     uint8_t *p  = rb->bs;
     uint8_t *be = rb->be;
+
+    if( p > be ) {
+        perror("MEMORY DAMAGE!");
+        exit(-1);
+    }
+
     for(p = rb->bs; p < be; p++) {
         char c = ' ';
-        if( p == rb->wp ) c = 'W';
-        if( p == rb->rp ) c = 'R';
-        if( p == rb->wp && p == rb->rp ) c = rb->written ? 'F' : 'E';
+        if( p == rb->wp && p == rb->rp ) {
+            c = rb->written ? 'F' : 'E';
+        } 
+        else if( p == rb->wp ) c = 'W';
+        else if ( p == rb->rp ) c = 'R';
+        else c = ' ';
         putchar(c);
     }
     putchar('\n');
@@ -373,7 +382,7 @@ int test_case_7() {
                         *p++ = chr + (i % 26);
                     }
                     ringbuffer_write(rb, tmp, len);
-                    test_print_rw(rb);
+/*                    test_print_rw(rb);*/
                     printf("\n");
                     test_dump(rb->bs, rb->be, "%c");
                     printf("\n");
@@ -394,8 +403,8 @@ int test_case_7() {
 /*                    test_dump(rb->bs, rb->be, "%c");*/
 /*                    printf("\n");*/
                     printf("TEST CASE #7 :: LOG = CONSUME len: %d, avail: %d, read: %d\n", len, avail, read);
-                    test_print_rw(rb);
-                    printf("\n");
+/*                    test_print_rw(rb);*/
+/*                    printf("\n");*/
                     if( read ) {
                         dst1 += read;
                     } else {
@@ -426,7 +435,7 @@ int test_case_8() {
     ringbuffer_t *rb;
     const uint8_t data[46] = "QWERTYUIOP{}|ASDFGHJKL:'ZXCVBNM<>?0123456789~";
     uint8_t result[sizeof(data)] = { 0 };
-    uint8_t databuf[RINGBUF_ALLOC_SIZE(46+9)] = { 0 };
+    uint8_t databuf[RINGBUF_ALLOC_SIZE(46+3)] = { 0 };
     uint8_t written = 0;
     uint8_t read = 0;
     size_t datalen = sizeof(data) - 1;
@@ -436,21 +445,27 @@ int test_case_8() {
     int res = 1;
 
     rb = ringbuffer_alloc(sizeof(databuf), databuf);
+    memset(rb->rp, '#', rb->data_size);
 
     printf("TEST CASE #8 :: NAME = CONSUME_TRIVIAL\n");
     printf("TEST CASE #8 :: LOG = datalen: %d, data: %s\n", datalen, data);
 
-    for(iter = 0; iter < 10; iter++ ) {
+    for(iter = 0; iter < 20; iter++ ) {
         uint8_t *rp = &result[0];
-        memset(result, '#', 45);
+        memset(result, '0', 45);
 
         written = ringbuffer_write(rb, data, datalen);
 
         while( ringbuffer_read_avail(rb) ) {
             ra0 = ringbuffer_read_avail(rb);
             wa0 = ringbuffer_write_avail(rb);
-            printf("TEST CASE #8 :: LOG = ra0: %d, wa0: %d, i: %d \n", ra0, wa0, i);
+            printf("TEST CASE #8 :: LOG0 = ra0: %d, wa0: %d, i: %d \n", ra0, wa0, i);
             read = ringbuffer_read(rb, rp, i);
+            printf("\n");
+            test_print_rw(rb);
+            printf("\n");
+            test_dump(rb->bs, rb->be, "%c");
+            printf("\n");
             i += 2;
             i %= 16;
             rp += read;
@@ -491,8 +506,8 @@ int main(void) {
 /*    test_case_4();*/
 /*    test_case_5();*/
 /*    test_case_6();*/
-    test_case_7();
-/*    test_case_8();*/
+/*    test_case_7();*/
+    test_case_8();
 
     return 0;
 }

@@ -318,7 +318,13 @@ int test_case_4() {
     printf("TEST CASE #4 :: LOG = read: %d, %s\n", read, result);
 
 
-    if( !strncmp(result, expected, sizeof(expected)-1) ) {
+    if( !strncmp(result, expected, sizeof(expected)-1) 
+        && ra0 == 54 
+        && wa0 == 10 
+        && ra1 == 64 
+        && wa1 == 0 
+        && read == ra1 ) {
+ 
         printf("TEST CASE #4 :: RESULT = PASS\n");
         return 0; 
     }

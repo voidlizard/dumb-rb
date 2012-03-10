@@ -326,7 +326,7 @@ FSM_DECLARE(fsm_test_7, INIT)
     FSM_STATE_DECL(CONSUME)
 FSM_DECLARE_END(fsm_test_7)
 
-#define TEST_CASE_7_ITERS    1
+#define TEST_CASE_7_ITERS    2
 #define TEST_CASE_7_CHUNK   64
 #define TEST_CASE_7_LEN     (TEST_CASE_7_ITERS*TEST_CASE_7_CHUNK)
 
@@ -348,6 +348,7 @@ int test_case_7() {
     printf("TEST CASE #7 :: NAME = RANDOM_RW_FSM\n");
  
     rb = ringbuffer_alloc(sizeof(databuf), databuf);
+    memset(rb->rp, '#', rb->data_size);
 
     for(;;) {
 
@@ -372,11 +373,13 @@ int test_case_7() {
                         *p++ = chr + (i % 26);
                     }
                     ringbuffer_write(rb, tmp, len);
-/*                    test_dump(rb->bs, rb->be, "%c");*/
-/*                    printf("\n");*/
+                    test_print_rw(rb);
+                    printf("\n");
+                    test_dump(rb->bs, rb->be, "%c");
+                    printf("\n");
                     memcpy(dst2, tmp, len);
                     dst2 += len;
-                    FSM_TRANS(FSM_NEXT_STATE);
+/*                    FSM_TRANS(FSM_NEXT_STATE);*/
                 }
             FSM_STATE_END(FSM_CURRENT_STATE)
 
@@ -388,8 +391,12 @@ int test_case_7() {
                     FSM_TRANS(FSM_S(PRODUCE));
                 } else {
                     size_t read = ringbuffer_read(rb, dst1, len);
+/*                    test_dump(rb->bs, rb->be, "%c");*/
+/*                    printf("\n");*/
+                    printf("TEST CASE #7 :: LOG = CONSUME len: %d, avail: %d, read: %d\n", len, avail, read);
+                    test_print_rw(rb);
+                    printf("\n");
                     if( read ) {
-                        printf("TEST CASE #7 :: LOG = CONSUME len: %d, avail: %d, read: %d\n", len, avail, read);
                         dst1 += read;
                     } else {
                         FSM_TRANS(FSM_S(PRODUCE));
@@ -401,12 +408,13 @@ int test_case_7() {
     }
 
     if( dst1 < dst1_end && ringbuffer_read_avail(rb) ) {
-        ringbuffer_read(rb, dst2, (size_t)(dst1_end - dst1));
+        ringbuffer_read(rb, dst1, (size_t)(dst1_end - dst1));
     }
     
-/*    test_dump(result1, dst1, "%c");*/
-/*    printf("\n");*/
+    printf("\n");
     test_dump(result2, dst2, "%c");
+    printf("\n");
+    test_dump(result1, dst1, "%c");
     printf("\n");
 
     printf("TEST CASE #7 :: RESULT = FAIL\n");
@@ -464,6 +472,11 @@ int test_case_8() {
 
     }
 
+    if( res ) {
+        printf("TEST CASE #8 :: RESULT = PASS\n");
+        return 0;
+    }
+
     printf("TEST CASE #8 :: RESULT = FAIL\n");
     return (-1);
 }
@@ -472,14 +485,14 @@ int test_case_8() {
 
 int main(void) {
 
-    test_case_1();
-    test_case_2();
-    test_case_3();
-    test_case_4();
-    test_case_5();
-    test_case_6();
-/*    test_case_7();*/
-    test_case_8();
+/*    test_case_1();*/
+/*    test_case_2();*/
+/*    test_case_3();*/
+/*    test_case_4();*/
+/*    test_case_5();*/
+/*    test_case_6();*/
+    test_case_7();
+/*    test_case_8();*/
 
     return 0;
 }

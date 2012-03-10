@@ -394,11 +394,8 @@ int test_case_5() {
         && wa0 == 10 
         && wa0 == written
         && ra1 == read
-        ) {
-/*        && ra1 == 64 */
-/*        && wa1 == 0 */
-/*        && read == ra1 ) {*/
-/* */
+      ) {
+
         printf("TEST CASE #4 :: RESULT = PASS\n");
         return 0; 
     }
@@ -408,6 +405,75 @@ int test_case_5() {
 }
 
 
+int test_case_6() {
+    ringbuffer_t *rb;
+    static uint8_t databuf[(sizeof(ringbuffer_t) - 1 + 64)];
+    static const uint8_t pattern[] = { '*', '@' };
+    static uint8_t result[64 + 1] = { 0 };
+    static const char expected[65] = { 0xFF, 0x00 };
+    int i = 0;
+
+    size_t ra0 = 0, ra1 = 0;
+    size_t wa0 = 0, wa1 = 0;
+    size_t read = 0;
+
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+
+    for(i=0; i<64; i++) {
+        rb->bs[i] = '0' + i;
+    }
+
+    printf("TEST CASE #6 :: NAME = STATE_2_READ_WRITE_UNDER\n");
+
+    rb->rp += 10;
+    rb->wp += 20;
+
+    printf("\n");
+    test_print_rw(rb);
+    printf("\n");
+    test_dump(rb->bs, rb->be, "%c");
+    printf("\n");
+    printf("\n");
+
+/*    ra0 = ringbuffer_read_avail(rb);*/
+/*    wa0 = ringbuffer_write_avail(rb);*/
+
+/*    while( ringbuffer_write_avail(rb) ) {*/
+/*        ringbuffer_write(rb, pattern, sizeof(pattern));*/
+/*    }*/
+
+/*    printf("\n");*/
+/*    test_print_rw(rb);*/
+/*    printf("\n");*/
+/*    test_dump(rb->bs, rb->be, "%c");*/
+/*    printf("\n");*/
+/*    printf("\n");*/
+
+/*    ra1 = ringbuffer_read_avail(rb);*/
+/*    wa1 = ringbuffer_write_avail(rb);*/
+
+/*    printf("TEST CASE #4 :: LOG = ra0: %d, wa0: %d\n", ra0, wa0);*/
+/*    printf("TEST CASE #4 :: LOG = ra1: %d, wa1: %d\n", ra1, wa1);*/
+
+/*    read = ringbuffer_read(rb, result, 64);*/
+
+/*    printf("TEST CASE #4 :: LOG = read: %d, %s\n", read, result);*/
+
+
+/*    if( !strncmp(result, expected, sizeof(expected)-1) */
+/*        && ra0 == 54 */
+/*        && wa0 == 10 */
+/*        && ra1 == 64 */
+/*        && wa1 == 0 */
+/*        && read == ra1 ) {*/
+/* */
+/*        printf("TEST CASE #4 :: RESULT = PASS\n");*/
+/*        return 0; */
+/*    }*/
+
+    printf("TEST CASE #6 :: RESULT = FAIL\n");
+    return (-1);
+}
 
 
 
@@ -418,6 +484,7 @@ int main(void) {
     test_case_3();
     test_case_4();
     test_case_5();
+    test_case_6();
 
     return 0;
 }

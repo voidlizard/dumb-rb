@@ -1,6 +1,8 @@
 
 #include "ringbuf.h"
 
+#include <string.h>
+
 #define ringbuffer_shift_ptr(p, s, e, w) ((p) + (w) <= (e) ? (p) + (w) : (s) + ((w) - ((e)-(p))))
 #define safe_sub(a, b) ((a) >= (b) ? ((a) - (b)) : 0)
 
@@ -101,7 +103,7 @@ size_t ringbuffer_read_avail(ringbuffer_t *rb) {
     return avail;
 }
 
-size_t ringbuffer_write(ringbuffer_t *rb, void *src, size_t size) {
+size_t ringbuffer_write(ringbuffer_t *rb, const void *src, size_t size) {
     uint8_t *rp = rb->rp;
     uint8_t *wp = rb->wp;
     uint8_t *bs = rb->bs;
@@ -162,7 +164,9 @@ size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
             toread = 0;
             break;
     }
-    rb->wp = ringbuffer_shift_ptr(rp, bs, be, toread);
+/*    printf("DEBUG %08X\n", rb->rp); */
+    rb->rp = ringbuffer_shift_ptr(rp, bs, be, toread);
+/*    printf("DEBUG %08X\n", rb->rp); */
     rb->written = safe_sub(rb->written, toread);
     return toread;
 }

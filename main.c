@@ -125,17 +125,22 @@ size_t ringbuffer_write(ringbuffer_t *rb, void *src, size_t size) {
 
     if( !avail || !towrite ) return 0;
 
+/*    printf("DEBUG STATE %d\n", ringbuffer_get_state(rb));*/
+
     switch( ringbuffer_get_state(rb) ) {
         case RINGBUF_STATE_1:
             memcpy(wp, src, towrite);
             break;
         case RINGBUF_STATE_2:
         case RINGBUF_STATE_3: {
-                size_t w1 = safe_sub(towrite, (size_t)(be - wp));
-                size_t w2 = towrite - w1;
-                memcpy(wp, src, w1);
-                memcpy(bs, src + w1, w2);
-                wp = bs + w2;
+                size_t rest = (size_t)(be - wp);
+                size_t w1 = towrite <= rest ? towrite : rest;
+                size_t w2 = safe_sub(towrite, w1);
+                size_t rest2 = (size_t)(rp - bs);
+                size_t w3 = w2 <= rest2 ? w2 : rest2;
+/*                printf("w1: %d, w2: %d, rest1: %d, rest2: %d\n", w1, w2, rest, rest2);*/
+                if( w1 ) memcpy(wp, src, w1);
+                if( w3 ) memcpy(bs, src + w1, w2);
             }
             break;
         default:
@@ -143,15 +148,25 @@ size_t ringbuffer_write(ringbuffer_t *rb, void *src, size_t size) {
             break;
     }
 
-    rb->wp = wp;
+    rb->wp = ringbuffer_shift_ptr(wp, bs, be, towrite);
     rb->written += towrite;
 
-    return towrite;
+/*    printf("DEBUG: %08X %d\n", rb->wp, rb->written);*/
 
+    return towrite;
 }
 
 
 size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
+}
+
+
+void test_dump(uint8_t *from, uint8_t *to, char *fmt) {
+    uint8_t *bp = from;
+    uint8_t *be = to;
+    for(; bp < be; bp++ ) {
+        printf(fmt, *bp);
+    }
 }
 
 int test_case_1() {
@@ -187,11 +202,44 @@ int test_case_2() {
     return (-1);
 }
 
+int test_case_3() {
+    ringbuffer_t *rb;
+    static uint8_t databuf[(sizeof(ringbuffer_t) - 1 + 64)];
+    uint8_t pattern[6] = { '0', '1', '2', '3', '4', '5' };
+    uint8_t result[64 + 1] = { 0 };
+    int i = 0;
+    const char expected[] = "0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmno";
+    size_t expectedLen = sizeof(expected) - 1;
+    printf("TEST CASE #3 :: NAME = Loop write \n");
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+    while( ringbuffer_write_avail(rb) ) {
+        uint8_t *sp = pattern;
+        uint8_t *pe = pattern + sizeof(pattern);
+        for(; sp < pe; sp++) *sp += i;
+        ringbuffer_write(rb, pattern, sizeof(pattern));
+/*        test_dump(rb->rp, rb->wp, "%c");*/
+/*        printf("\n");*/
+        i = (pattern[sizeof(pattern)-1] + 1) - pattern[0];
+    }
+
+    memcpy(result, rb->rp, (size_t)(rb->be - rb->rp));
+    printf("TEST CASE #3 :: LOG = %s \n", expected);
+    printf("TEST CASE #3 :: LOG = %s \n", result);
+    if( !strncmp(result, expected, expectedLen) ) {
+        printf("TEST CASE #3 :: RESULT = PASS\n");
+        return 0;
+    }
+
+    printf("TEST CASE #3 :: RESULT = FAIL\n");
+    return (-1);
+}
+
 
 int main(void) {
 
     test_case_1();
     test_case_2();
+    test_case_3();
 
     return 0;
 }

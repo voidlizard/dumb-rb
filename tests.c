@@ -13,8 +13,10 @@ void test_validate_rb(ringbuffer_t *rb) {
     uint8_t *wp = rb->rp;
     uint8_t *bs  = rb->bs;
     uint8_t *be = rb->be;
+    size_t ra = ringbuffer_read_avail(rb);
+    size_t wa = ringbuffer_write_avail(rb);
     if( !( rp >= bs && rp < be && wp >= bs && wp < be ) ) {
-        fprintf(stderr, "MEMORY DAMAGE!\n");
+        fprintf(stderr, "MEMORY DAMAGE %08X %08X %08X %08X %d %d\n", rp, wp, bs, be, ra, wa);
         exit(-1);
     }
 }
@@ -25,6 +27,8 @@ void test_print_rw(ringbuffer_t *rb) {
     uint8_t *wp = rb->rp;
     uint8_t *p  = rb->bs;
     uint8_t *be = rb->be;
+
+    test_validate_rb(rb);
 
     for(p = rb->bs; p < be; p++) {
         char c = ' ';
@@ -344,8 +348,8 @@ FSM_DECLARE(fsm_test_7, INIT)
     FSM_STATE_DECL(CONSUME)
 FSM_DECLARE_END(fsm_test_7)
 
-#define TEST_CASE_7_ITERS    2
-#define TEST_CASE_7_CHUNK   64
+#define TEST_CASE_7_ITERS    4
+#define TEST_CASE_7_CHUNK   64 
 #define TEST_CASE_7_LEN     (TEST_CASE_7_ITERS*TEST_CASE_7_CHUNK)
 
 int test_case_7() {
@@ -372,6 +376,8 @@ int test_case_7() {
 
         if( dst1 >= dst1_end && dst2 >= dst2_end ) break;
 
+        test_validate_rb(rb);
+
         FSM_BEGIN(fsm_test_7, 1)
 
             FSM_STATE_BEGIN(INIT)
@@ -379,7 +385,7 @@ int test_case_7() {
             FSM_STATE_END(FSM_NEXT_STATE)
 
             FSM_STATE_BEGIN(PRODUCE)
-                size_t len = rand() % TEST_CASE_7_CHUNK;
+                size_t len = ((size_t)rand()) % 16;
                 size_t avail = ringbuffer_write_avail(rb);
                 if( !avail || len > avail || !(len % 7) || dst2 >= dst2_end ) {
                     FSM_TRANS(FSM_NEXT_STATE);
@@ -391,29 +397,32 @@ int test_case_7() {
                         *p++ = chr + (i % 26);
                     }
                     ringbuffer_write(rb, tmp, len);
-/*                    test_print_rw(rb);*/
+                    test_validate_rb(rb);
+                    test_print_rw(rb);
                     printf("\n");
                     test_dump(rb->bs, rb->be, "%c");
                     printf("\n");
                     memcpy(dst2, tmp, len);
                     dst2 += len;
-/*                    FSM_TRANS(FSM_NEXT_STATE);*/
+                    FSM_TRANS(FSM_NEXT_STATE);
                 }
             FSM_STATE_END(FSM_CURRENT_STATE)
 
             FSM_STATE_BEGIN(CONSUME)
                 size_t avail = ringbuffer_read_avail(rb);
                 size_t wtf = rand() % 100;
-                size_t len = rand() % TEST_CASE_7_CHUNK;
+/*                size_t len = rand() % TEST_CASE_7_CHUNK;*/
+                size_t len = ((size_t)rand()) % 16;
+                test_validate_rb(rb);
                 if( !avail || !(wtf % 7) || dst1 >= dst1_end ) {
                     FSM_TRANS(FSM_S(PRODUCE));
                 } else {
                     size_t read = ringbuffer_read(rb, dst1, len);
-/*                    test_dump(rb->bs, rb->be, "%c");*/
-/*                    printf("\n");*/
                     printf("TEST CASE #7 :: LOG = CONSUME len: %d, avail: %d, read: %d\n", len, avail, read);
-/*                    test_print_rw(rb);*/
-/*                    printf("\n");*/
+                    test_print_rw(rb);
+                    printf("\n");
+                    test_dump(rb->bs, rb->be, "%c");
+                    printf("\n");
                     if( read ) {
                         dst1 += read;
                     } else {
@@ -439,6 +448,89 @@ int test_case_7() {
     return (-1);
 }
 
+
+int test_case_7_1() {
+    ringbuffer_t *rb;
+    static uint8_t databuf[RINGBUF_ALLOC_SIZE(256)];
+    int i = 0;
+    size_t ra0 = 0, wa0 = 0;
+    printf("TEST CASE #7_1 :: NAME = WRITE OVER\n");
+    
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+    memset(rb->rp, '#', rb->data_size);
+
+    for(i=0; i<1024; i++) {
+        char c = 'A' + (char)i;
+        ringbuffer_write(rb, &c, 1);
+    }
+
+    ra0 = ringbuffer_read_avail(rb);
+    wa0 = ringbuffer_write_avail(rb);
+    printf("TEST CASE #7_1 :: LOG = ra0: %d, wa0: %d\n", ra0, wa0);
+
+    if( ra0 == 256 && wa0 == 0 ) {
+        printf("TEST CASE #7_1 :: RESULT = PASS\n");
+        return 0;
+    }
+
+    printf("TEST CASE #7_1 :: RESULT = FAIL\n");        
+}
+
+
+#define TEST_CASE_7_2_RLEN   8192*2 
+#define TEST_CASE_7_2_CHUNK      64
+
+int test_case_7_2() {
+    ringbuffer_t *rb;
+    static uint8_t databuf[RINGBUF_ALLOC_SIZE(TEST_CASE_7_2_CHUNK*2)];
+    static uint8_t r1[TEST_CASE_7_2_RLEN+1] = { 0 };
+    static uint8_t r2[TEST_CASE_7_2_RLEN+1] = { 0 };
+    static uint8_t chunk[TEST_CASE_7_2_CHUNK] = { 0 };
+    size_t tlen = sizeof(r1) - 1;
+    int res = 0;
+    int i = 0;
+    size_t ra0 = 0, wa0 = 0, written = 0, read = 0;
+    printf("TEST CASE #7_2 :: NAME = LOOP WRITE/READ\n");
+    
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+    memset(rb->rp, '#', rb->data_size);
+
+    srand(time(0));
+
+    while( written < tlen ) {
+        size_t wlen = ((size_t)rand()) % TEST_CASE_7_2_CHUNK;
+        size_t rlen = ((size_t)rand()) % TEST_CASE_7_2_CHUNK;
+        size_t wa = 0, ra = 0;
+
+        wlen = written + wlen > tlen ? tlen - written : wlen;
+
+        printf("TEST CASE #7_2 :: LOG = wlen: %d, rlen: %d\n", wlen, rlen);
+        wa = ringbuffer_write_avail(rb);
+        ra = ringbuffer_read_avail(rb);
+
+        if( wlen <= wa && wlen ) {
+            memset(chunk, '0' + (written%10), wlen);
+            memcpy(r1 + written, chunk, wlen);
+            ringbuffer_write(rb, chunk, wlen);
+            written += wlen;
+        }
+        if( rlen <= ra && rlen ) {
+            read += ringbuffer_read(rb, r2 + read, rlen);
+        }
+
+        test_validate_rb(rb);
+    }
+
+    if( read < written ) {
+        read += ringbuffer_read(rb, r2 + read, (written - read));
+    }
+
+    res = !strncmp(r1, r2, TEST_CASE_7_2_RLEN);
+    printf("TEST CASE #7_2 :: LOG = written: %d, read: %d, match: %d\n", written, read, res);
+
+
+    printf("TEST CASE #7_2 :: RESULT = FAIL\n");
+}
 
 int test_case_8() {
     ringbuffer_t *rb;
@@ -505,10 +597,9 @@ int main(void) {
 /*    test_case_5();*/
 /*    test_case_6();*/
 /*    test_case_7();*/
-
-    fprintf(stderr, "SIZEOF(uint8_t) == %d\n", sizeof(uint8_t));
-
-    test_case_8();
+/*    test_case_7_1();*/
+    test_case_7_2();
+/*    test_case_8();*/
 
     return 0;
 }

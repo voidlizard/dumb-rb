@@ -14,7 +14,7 @@ typedef struct ring_buffer_t_ {
 } ringbuffer_t;
 
 #define ringbuffer_shift_ptr(p, s, e, w) ((p) + (w) <= (e) ? (p) + (w) : (s) + ((w) - ((e)-(p))))
-#define safe_sub(a, b) (a) >= ((b) ? ((a) - (b)) : 0)
+#define safe_sub(a, b) ((a) >= (b) ? ((a) - (b)) : 0)
 
 typedef enum {
   RINGBUF_STATE_1 = 0      //  #   RA   [WP] WA  [RP]  RA   #
@@ -106,7 +106,7 @@ size_t ringbuffer_read_avail(ringbuffer_t *rb) {
             avail = 0;
             break;
         case RINGBUF_STATE_4:
-            avail = ((size_t)(be - rp) + (size_t)(bs - wp));
+            avail = ((size_t)(be - rp) + (size_t)(wp - bs));
             break;
     }
 
@@ -120,46 +120,76 @@ size_t ringbuffer_write(ringbuffer_t *rb, void *src, size_t size) {
     uint8_t *be = rb->be;
     size_t towrite = size;
     size_t avail = ringbuffer_write_avail(rb);
-    
     towrite = towrite < avail ? towrite : avail;
-
     if( !avail || !towrite ) return 0;
-
-/*    printf("DEBUG STATE %d\n", ringbuffer_get_state(rb));*/
-
     switch( ringbuffer_get_state(rb) ) {
         case RINGBUF_STATE_1:
             memcpy(wp, src, towrite);
             break;
         case RINGBUF_STATE_2:
         case RINGBUF_STATE_3: {
-                size_t rest = (size_t)(be - wp);
-                size_t w1 = towrite <= rest ? towrite : rest;
-                size_t w2 = safe_sub(towrite, w1);
-                size_t rest2 = (size_t)(rp - bs);
-                size_t w3 = w2 <= rest2 ? w2 : rest2;
-/*                printf("w1: %d, w2: %d, rest1: %d, rest2: %d\n", w1, w2, rest, rest2);*/
-                if( w1 ) memcpy(wp, src, w1);
-                if( w3 ) memcpy(bs, src + w1, w2);
+            size_t rest = (size_t)(be - wp);
+            size_t w1 = towrite <= rest ? towrite : rest;
+            size_t w2 = safe_sub(towrite, w1);
+            size_t rest2 = (size_t)(rp - bs);
+            size_t w3 = w2 <= rest2 ? w2 : rest2;
+            if( w1 ) memcpy(wp, src, w1);
+            if( w3 ) memcpy(bs, src + w1, w3);
             }
             break;
         default:
             towrite = 0;
             break;
     }
-
     rb->wp = ringbuffer_shift_ptr(wp, bs, be, towrite);
     rb->written += towrite;
-
-/*    printf("DEBUG: %08X %d\n", rb->wp, rb->written);*/
-
     return towrite;
 }
 
-
 size_t ringbuffer_read(ringbuffer_t *rb, void *dst, size_t size) {
+    uint8_t *rp = rb->rp;
+    uint8_t *wp = rb->wp;
+    uint8_t *bs = rb->bs;
+    uint8_t *be = rb->be;
+    size_t toread = size;
+    size_t avail = ringbuffer_read_avail(rb);
+    toread = toread < avail ? toread : avail;
+    if( !avail || !toread ) return 0;
+    switch( ringbuffer_get_state(rb) ) {
+        case RINGBUF_STATE_1:
+        case RINGBUF_STATE_4: {
+            size_t rest = (size_t)(be - rp);
+            size_t r1 = toread <= rest ? toread : rest;
+            size_t r2 = safe_sub(toread, r1);
+            size_t rest2 = (size_t)(wp - bs);
+            size_t r3 = r2 <= rest2 ? r2 : rest2;
+            if( r1 ) memcpy(dst, rp, r1);
+            if( r3 ) memcpy(dst + r1, bs, r3);
+        }
+        break;
+        case RINGBUF_STATE_2:
+            memcpy(dst, rp, toread);
+            break;
+        default:
+            toread = 0;
+            break;
+    }
+    rb->wp = ringbuffer_shift_ptr(rp, bs, be, toread);
+    rb->written = safe_sub(rb->written, toread);
+    return toread;
 }
 
+void test_print_rw(ringbuffer_t *rb) {
+    uint8_t *p  = rb->bs;
+    uint8_t *be = rb->be;
+    for(; p < be; p++) {
+        char c = ' ';
+        if( p == rb->wp ) c = 'W';
+        if( p == rb->rp ) c = 'R';
+        if( p == rb->wp && p == rb->rp ) c = rb->written ? 'F' : 'E';
+        putchar(c);
+    }
+}
 
 void test_dump(uint8_t *from, uint8_t *to, char *fmt) {
     uint8_t *bp = from;
@@ -217,8 +247,6 @@ int test_case_3() {
         uint8_t *pe = pattern + sizeof(pattern);
         for(; sp < pe; sp++) *sp += i;
         ringbuffer_write(rb, pattern, sizeof(pattern));
-/*        test_dump(rb->rp, rb->wp, "%c");*/
-/*        printf("\n");*/
         i = (pattern[sizeof(pattern)-1] + 1) - pattern[0];
     }
 
@@ -234,12 +262,78 @@ int test_case_3() {
     return (-1);
 }
 
+int test_case_4() {
+    ringbuffer_t *rb;
+    static uint8_t databuf[(sizeof(ringbuffer_t) - 1 + 64)];
+    static const uint8_t pattern[] = { '*', '@' };
+    static uint8_t result[64 + 1] = { 0 };
+    static const char expected[65] = "DEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmno0123456789*@*@*@*@*@";
+    int i = 0;
+
+    size_t ra0 = 0, ra1 = 0;
+    size_t wa0 = 0, wa1 = 0;
+    size_t read = 0;
+
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+
+    for(i=0; i<64; i++) {
+        rb->bs[i] = '0' + i;
+    }
+
+    printf("TEST CASE #4 :: NAME = STATE_1_READ_WRITE_UNDER\n");
+
+
+    rb->wp += 10;
+    rb->rp += 20;
+
+    printf("\n");
+    test_print_rw(rb);
+    printf("\n");
+    test_dump(rb->bs, rb->be, "%c");
+    printf("\n");
+    printf("\n");
+
+    ra0 = ringbuffer_read_avail(rb);
+    wa0 = ringbuffer_write_avail(rb);
+
+    while( ringbuffer_write_avail(rb) ) {
+        ringbuffer_write(rb, pattern, sizeof(pattern));
+    }
+
+    printf("\n");
+    test_print_rw(rb);
+    printf("\n");
+    test_dump(rb->bs, rb->be, "%c");
+    printf("\n");
+    printf("\n");
+
+    ra1 = ringbuffer_read_avail(rb);
+    wa1 = ringbuffer_write_avail(rb);
+
+    printf("TEST CASE #4 :: LOG = ra0: %d, wa0: %d\n", ra0, wa0);
+    printf("TEST CASE #4 :: LOG = ra1: %d, wa1: %d\n", ra1, wa1);
+
+    read = ringbuffer_read(rb, result, 64);
+
+    printf("TEST CASE #4 :: LOG = read: %d, %s\n", read, result);
+
+
+    if( !strncmp(result, expected, sizeof(expected)-1) ) {
+        printf("TEST CASE #4 :: RESULT = PASS\n");
+        return 0; 
+    }
+
+    printf("TEST CASE #4 :: RESULT = FAIL\n");
+    return (-1);
+}
+
 
 int main(void) {
 
     test_case_1();
     test_case_2();
     test_case_3();
+    test_case_4();
 
     return 0;
 }

@@ -6,5 +6,8 @@ Buld
 make
 
 
+Test
+----
 
+./tests
 

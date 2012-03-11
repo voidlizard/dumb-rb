@@ -346,23 +346,21 @@ int test_case_6() {
 FSM_DECLARE(fsm_test_7, INIT)
     FSM_STATE_DECL(PRODUCE)
     FSM_STATE_DECL(CONSUME)
+    FSM_STATE_DECL(FUCKUP)
 FSM_DECLARE_END(fsm_test_7)
 
-#define TEST_CASE_7_ITERS    4
+#define TEST_CASE_7_ITERS   20
 #define TEST_CASE_7_CHUNK   64 
 #define TEST_CASE_7_LEN     (TEST_CASE_7_ITERS*TEST_CASE_7_CHUNK)
 
 int test_case_7() {
-    int iterations = 200;
     ringbuffer_t *rb;
     static uint8_t databuf[RINGBUF_ALLOC_SIZE(TEST_CASE_7_CHUNK*2)];
-    static uint8_t result1[TEST_CASE_7_LEN] = { 0 };
-    static uint8_t result2[TEST_CASE_7_LEN] = { 0 };
-    uint8_t *dst2 = &result2[0];
-    uint8_t *dst1 = &result1[0];
-    uint8_t *dst1_end = &result1[TEST_CASE_7_LEN];
-    uint8_t *dst2_end = &result2[TEST_CASE_7_LEN];
+    static uint8_t result1[TEST_CASE_7_LEN + 1] = { 0 };
+    static uint8_t result2[TEST_CASE_7_LEN + 1] = { 0 };
     uint8_t tmp[TEST_CASE_7_CHUNK] = { 0 };
+    size_t written = 0, read = 0;
+    int fuckup = 0;
     static uint8_t chr = 'A';
 
     srand(time(0));
@@ -372,9 +370,7 @@ int test_case_7() {
     rb = ringbuffer_alloc(sizeof(databuf), databuf);
     memset(rb->rp, '#', rb->data_size);
 
-    for(;;) {
-
-        if( dst1 >= dst1_end && dst2 >= dst2_end ) break;
+    for(; written < TEST_CASE_7_LEN; ) {
 
         test_validate_rb(rb);
 
@@ -385,64 +381,55 @@ int test_case_7() {
             FSM_STATE_END(FSM_NEXT_STATE)
 
             FSM_STATE_BEGIN(PRODUCE)
-                size_t len = ((size_t)rand()) % 16;
+                size_t len = ((size_t)rand()) % TEST_CASE_7_CHUNK;
                 size_t avail = ringbuffer_write_avail(rb);
-                if( !avail || len > avail || !(len % 7) || dst2 >= dst2_end ) {
-                    FSM_TRANS(FSM_NEXT_STATE);
+
+
+                len = written + len <= TEST_CASE_7_LEN ? len :  TEST_CASE_7_LEN - written;
+
+                if( len <= avail && (len % 5) && written < TEST_CASE_7_LEN )  {
+                    printf("TEST CASE #7 :: LOG = PRODUCE %d\n", len);
+                    memset(tmp, '0' + (written%10), len);
+                    memcpy(result1 + written, tmp, len);
+                    written += ringbuffer_write(rb, tmp, len);
                 } else {
-                    uint8_t *p = &tmp[0];
-                    int i = 0;
-                    printf("TEST CASE #7 :: LOG = PRODUCE len: %d \n", len);
-                    for(i = 0; i < len; i++ ) {
-                        *p++ = chr + (i % 26);
-                    }
-                    ringbuffer_write(rb, tmp, len);
-                    test_validate_rb(rb);
-                    test_print_rw(rb);
-                    printf("\n");
-                    test_dump(rb->bs, rb->be, "%c");
-                    printf("\n");
-                    memcpy(dst2, tmp, len);
-                    dst2 += len;
                     FSM_TRANS(FSM_NEXT_STATE);
                 }
             FSM_STATE_END(FSM_CURRENT_STATE)
 
             FSM_STATE_BEGIN(CONSUME)
                 size_t avail = ringbuffer_read_avail(rb);
-                size_t wtf = rand() % 100;
-/*                size_t len = rand() % TEST_CASE_7_CHUNK;*/
-                size_t len = ((size_t)rand()) % 16;
-                test_validate_rb(rb);
-                if( !avail || !(wtf % 7) || dst1 >= dst1_end ) {
-                    FSM_TRANS(FSM_S(PRODUCE));
+                size_t len = ((size_t)rand()) % TEST_CASE_7_CHUNK;
+                if( avail && len && len <= avail && (len % 3) ) {
+                    printf("TEST CASE #7 :: LOG = CONSUME %d\n", len);
+                    read += ringbuffer_read(rb, result2 + read, len);
                 } else {
-                    size_t read = ringbuffer_read(rb, dst1, len);
-                    printf("TEST CASE #7 :: LOG = CONSUME len: %d, avail: %d, read: %d\n", len, avail, read);
-                    test_print_rw(rb);
-                    printf("\n");
-                    test_dump(rb->bs, rb->be, "%c");
-                    printf("\n");
-                    if( read ) {
-                        dst1 += read;
-                    } else {
-                        FSM_TRANS(FSM_S(PRODUCE));
-                    }
+                    FSM_TRANS(FSM_S(PRODUCE));
                 }
             FSM_STATE_END(FSM_CURRENT_STATE)
 
+            FSM_STATE_BEGIN(FUCKUP)
+                fuckup = 1;
+                printf("TEST CASE #7 :: LOG = FUCKUP\n");
+                goto _exit;
+            FSM_STATE_END(FSM_FINAL_STATE)
+
         FSM_END(fsm_test_7)
+
     }
 
-    if( dst1 < dst1_end && ringbuffer_read_avail(rb) ) {
-        ringbuffer_read(rb, dst1, (size_t)(dst1_end - dst1));
+_exit:
+
+    if( read < written ) {
+        read += ringbuffer_read(rb, result2 + read, (written - read));
     }
-    
-    printf("\n");
-    test_dump(result2, dst2, "%c");
-    printf("\n");
-    test_dump(result1, dst1, "%c");
-    printf("\n");
+
+    printf("TEST CASE #7 :: LOG = written: %d, read: %d \n", written, read);
+
+    if( !strncmp(result2, result1, TEST_CASE_7_CHUNK) ) {
+        printf("TEST CASE #7 :: RESULT = PASS\n");
+        return 0;
+    }
 
     printf("TEST CASE #7 :: RESULT = FAIL\n");
     return (-1);
@@ -605,7 +592,7 @@ int main(void) {
     test_case_4();
     test_case_5();
     test_case_6();
-/*    test_case_7();*/
+    test_case_7();
     test_case_7_1();
     test_case_7_2();
     test_case_8();

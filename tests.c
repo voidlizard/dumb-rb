@@ -210,6 +210,7 @@ int test_case_5() {
     printf("TEST CASE #5 :: NAME = STATE_1_READ_WRITE_OVER\n");
 
     rb->wp += 10;
+    rb->twp = rb->wp;
     rb->rp += 20;
 
     printf("\n");
@@ -245,7 +246,7 @@ int test_case_5() {
     read = ringbuffer_read(rb, result, ra1);
     printf("TEST CASE #5 :: LOG = read: %d, %s\n", read, result);
 
-    if( !strncmp(result, expected, sizeof(expected)-1)  
+    if( !strncmp(result, expected, sizeof(expected)-1)
         && ra0 == 54 
         && wa0 == 10 
         && wa0 == written
@@ -282,6 +283,7 @@ int test_case_6() {
     printf("TEST CASE #6 :: NAME = STATE_2_READ_WRITE_UNDER\n");
 
     rb->wp += 25;
+    rb->twp = rb->wp;
     rb->rp += 11;
 
     printf("\n");
@@ -582,6 +584,94 @@ int test_case_8() {
     return (-1);
 }
 
+int test_case_9() {
+    ringbuffer_t *rb;
+    uint8_t databuf[RINGBUF_ALLOC_SIZE(16)] = { 0 };
+    uint8_t f1 = 0, f2 = 0, f3 = 0, f4 = 0;
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+
+    printf("TEST CASE #9 :: NAME = FLAGS\n");
+
+    f1 = rb->flags;
+    ringbuffer_update_flags(rb, 0, RINGBUF_AUTOCOMMIT);
+
+    f2 = rb->flags;
+
+    ringbuffer_update_flags(rb, 1, (RINGBUF_AUTOCOMMIT|4|8));
+
+    f3 = rb->flags;
+
+    ringbuffer_update_flags(rb, 0, (4|8));
+
+    f4 = rb->flags;
+
+    printf("TEST CASE #9 :: LOG = %02X, %02X, %02X, %02X\n", f1, f2, f3, f4);
+
+    if(  f1 == RINGBUF_AUTOCOMMIT 
+      && f2 == 0
+      && f3 == (RINGBUF_AUTOCOMMIT|4|8) 
+      && f4 == RINGBUF_AUTOCOMMIT ) {
+        printf("TEST CASE #9 :: RESULT = PASS\n");
+        return 0;
+    }
+    printf("TEST CASE #9 :: RESULT = FAIL\n");
+    return (-1);
+}
+
+int test_case_10() {
+    ringbuffer_t *rb;
+    uint8_t databuf[RINGBUF_ALLOC_SIZE(32)] = { 0 };
+
+    uint8_t data[] = {'A','A','A','A',0xFF,
+                      'B','B','B',0xFF,'C',
+                      'C','C',0xFF,'Z','Z',
+                      'Z',0xFF,'K','K','K','K',
+                      0xFD, 'P','M', 0xFF,0};
+
+    uint8_t result[sizeof(data)] = { 0 };
+    uint8_t *p = data;
+
+    memset(databuf, 'E', sizeof(databuf));
+    rb = ringbuffer_alloc(sizeof(databuf), databuf);
+
+    ringbuffer_update_flags(rb, 0, RINGBUF_AUTOCOMMIT);
+
+    printf("TEST CASE #10 :: NAME = TRANSACTION_1\n");
+
+    for( p = data; *p; p++ ) {
+        switch(*p) {
+            case 0xFF:
+                ringbuffer_commit(rb);
+                break;
+
+            case 0xFD:
+                ringbuffer_rollback(rb);
+                break;
+
+            default:
+                ringbuffer_write(rb, p, 1);
+                break;
+        }
+    }
+
+    printf("TEST CASE #10 :: LOG = ra: %d\n", ringbuffer_read_avail(rb));
+    test_print_rw(rb);
+    printf("\n");
+    test_dump(rb->bs, rb->be, "%c");
+    printf("\n");
+
+    ringbuffer_read(rb, result, sizeof(result));
+
+    printf("TEST CASE #10 :: LOG = %s\n", result);
+
+    if( !strncmp(result, "AAAABBBCCCZZZPM", (sizeof(result)-1) ) ) {
+        printf("TEST CASE #10 :: RESULT = PASS\n");
+        return 0;
+    }
+    printf("TEST CASE #10 :: RESULT = FAIL\n");
+    return (-1);
+}
+
 
 
 int main(void) {
@@ -596,6 +686,8 @@ int main(void) {
     test_case_7_1();
     test_case_7_2();
     test_case_8();
+    test_case_9();
+    test_case_10();
 
     return 0;
 }

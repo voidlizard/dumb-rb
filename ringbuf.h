@@ -25,6 +25,10 @@ size_t ringbuffer_write_avail(ringbuffer_t *rb);
 size_t ringbuffer_read_avail(ringbuffer_t *rb);
 size_t ringbuffer_write(ringbuffer_t *rb, const uint8_t *src, size_t size);
 size_t ringbuffer_read(ringbuffer_t *rb, uint8_t *dst, size_t size);
+void ringbuffer_commit(ringbuffer_t *rb);
+void ringbuffer_rollback(ringbuffer_t *rb);
+void ringbuffer_update_flags(ringbuffer_t *rb, uint8_t set, uint8_t flags);
+
 
 #define RINGBUF_ALLOC_SIZE(n) (sizeof(ringbuffer_t) - 1 + (n))
 

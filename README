@@ -1,5 +1,7 @@
 Simple ringbuffer implementation
 
+The buffer is DEFINITELY not thread/interrupt safe. It needs external syncronization EVEN if transactional mode is on
+
 Buld
 ----
 

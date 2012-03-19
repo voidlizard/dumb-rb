@@ -67,7 +67,7 @@ ringbuffer_t* ringbuffer_alloc(size_t data_size, uint8_t *data) {
 
 size_t ringbuffer_write_avail(ringbuffer_t *rb) {
     uint8_t *rp = rb->rp;
-    uint8_t *wp = rb->wp;
+    uint8_t *wp = rb->twp;
     uint8_t *bs = rb->bs;
     uint8_t *be = rb->be;
     size_t  avail = 0;
@@ -143,15 +143,30 @@ size_t ringbuffer_write(ringbuffer_t *rb, const uint8_t *src, size_t size) {
             towrite = 0;
             break;
     }
+
     rb->twp = ringbuffer_shift_ptr(wp, bs, be, towrite);
     rb->twritten += towrite;
 
     if( rb->flags & RINGBUF_AUTOCOMMIT ) {
-        rb->wp = rb->twp;
-        rb->written = rb->twritten;
+        ringbuffer_commit(rb);
     }
 
     return towrite;
+}
+
+void ringbuffer_update_flags(ringbuffer_t *rb, uint8_t set, uint8_t flag) {
+    rb->flags = set ? (rb->flags | flag) : (rb->flags & ~flag);
+}
+
+void ringbuffer_commit(ringbuffer_t *rb) {
+    rb->wp = rb->twp;
+    rb->written += rb->twritten;
+    rb->twritten = 0;
+}
+
+void ringbuffer_rollback(ringbuffer_t *rb) {
+    rb->twp = rb->wp;
+    rb->twritten = 0;
 }
 
 size_t ringbuffer_read(ringbuffer_t *rb, uint8_t *dst, size_t size) {

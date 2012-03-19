@@ -1,3 +1,7 @@
 
     - Remove all warnings
+
 	- Add multithreading tests and fixes
+
+	- FIXME: The buffer is DEFINITELY not thread/interrupt safe. Need syncronization EVEN if transactional mode
+

@@ -42,11 +42,14 @@ static inline uint8_t *ringbuffer_shift_ptr(uint8_t *p, uint8_t *s, uint8_t *e, 
 }
 
 void ringbuffer_reset(ringbuffer_t *rb) {
+    rb->flags = RINGBUF_DEFAULT_FLAGS;
     rb->bs = &rb->data[0];
     rb->be = &rb->data[rb->data_size];
     rb->rp = rb->bs;
     rb->wp = rb->bs;
     rb->written = 0;
+    rb->twritten = 0;
+    rb->twp = rb->wp;
 }
 
 
@@ -114,7 +117,7 @@ size_t ringbuffer_read_avail(ringbuffer_t *rb) {
 
 size_t ringbuffer_write(ringbuffer_t *rb, const uint8_t *src, size_t size) {
     uint8_t *rp = rb->rp;
-    uint8_t *wp = rb->wp;
+    uint8_t *wp = rb->twp;
     uint8_t *bs = rb->bs;
     uint8_t *be = rb->be;
     size_t towrite = size;
@@ -140,14 +143,14 @@ size_t ringbuffer_write(ringbuffer_t *rb, const uint8_t *src, size_t size) {
             towrite = 0;
             break;
     }
-    rb->wp = ringbuffer_shift_ptr(wp, bs, be, towrite);
+    rb->twp = ringbuffer_shift_ptr(wp, bs, be, towrite);
+    rb->twritten += towrite;
 
-/*    if( rb->rp < rb->bs || rb->rp >= rb->be ) {*/
-/*        fprintf(stderr, "BAD SHIFT ON WRITE");*/
-/*        exit(-1);*/
-/*    }*/
+    if( rb->flags & RINGBUF_AUTOCOMMIT ) {
+        rb->wp = rb->twp;
+        rb->written = rb->twritten;
+    }
 
-    rb->written += towrite;
     return towrite;
 }
 

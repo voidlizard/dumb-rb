@@ -5,5 +5,9 @@
 #include <stddef.h>
 #endif
 
+#ifndef RINGBUF_DEFAULT_FLAGS
+#define RINGBUF_DEFAULT_FLAGS RINGBUF_AUTOCOMMIT
+#endif
+
 #endif
 

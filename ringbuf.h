@@ -4,12 +4,17 @@
 #include "ringbuf_setup.h"
 #include <stdint.h>
 
+#define RINGBUF_AUTOCOMMIT 1
+
 typedef struct ring_buffer_t_ {
+	uint8_t flags;
     uint8_t *bs;
     uint8_t *be;
     uint8_t *rp;
     uint8_t *wp;
     size_t  written;
+	uint8_t *twp;
+	uint8_t twritten;
     size_t  data_size;
     uint8_t data[1];
 } ringbuffer_t;
